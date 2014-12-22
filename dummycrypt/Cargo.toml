@@ -1,0 +1,9 @@
+[package]
+
+name = "dummycrypt"
+version = "1.0.0"
+authors = ["Charles Hubain <charles.hubain@haxelion.eu>"]
+
+[profile.release]
+opt-level = 3
+debug = false
