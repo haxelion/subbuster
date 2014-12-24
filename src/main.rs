@@ -32,8 +32,8 @@ fn main() {
     let mut args: Vec<String> = os::args();
     let mut dict = Dictionary::new();
     let mut lenght: Vec<Probabilistic<uint>> = Vec::new();
-    let mut best_score : f64;
-    let mut best_key : Vec<[u8, ..2]> = Vec::new();
+    let mut verbose = false;
+    let mut model = 1u;
     let mut i : uint;
 
     if args.len() < 3 {
@@ -43,10 +43,35 @@ fn main() {
     let dictionary_path = args.pop().unwrap();
     let input = args.pop().unwrap();
     i = 0;
-    while i+1 < args.len() {
-        if args[i].as_slice() == "-l" {
+    while i < args.len() {
+        if args[i].as_slice() == "-v" {
+            verbose = true;
+        }
+        else if args[i].as_slice() == "-m" {
             i += 1;
-            match str::from_str::<uint>(args[i].as_slice()) {
+            if i >= args.len() {
+                println!("No model number given");
+                print_usage();
+                return;
+            }
+            model = match from_str::<uint>(args[i].as_slice()) {
+                Some(1) => 1,
+                Some(2) => 2,
+                _ => {
+                    println!("{} is not a valid model number", args[i]);
+                    print_usage();
+                    return;
+                }
+            };
+        }
+        else if args[i].as_slice() == "-l" {
+            i += 1;
+            if i >= args.len() {
+                println!("No key lenght given");
+                print_usage();
+                return;
+            }
+            match from_str::<uint>(args[i].as_slice()) {
                 Some(l) => {
                     lenght.push(Probabilistic {p : 1f64, v : l});
                 },
@@ -68,25 +93,59 @@ fn main() {
 
     if lenght.is_empty() {
         find_lenght_candidates(data.as_slice(), &mut lenght, 10);
+        if verbose {
+            println!("Lenght candidates: ");
+            println!("------------------\n");
+            println!("P        | l");
+            for l in lenght.iter() {
+                println!("{:.6} : {}", l.p, l.v);
+            }
+            print!("\n\n");
+        }
     }
 
-    best_score = 1f64;
+    let mut best_score = 0f64;
+    let mut best_key : Vec<Vec<u8>> = Vec::new();
     lenght.truncate(5);
+    if verbose {
+        println!("Key candidates for model {}:", model);
+        println!("----------------------------\n");
+        println!("P        | l   | K");
+    }
     for l in lenght.iter() {
-        let mut key : Vec<[u8, ..2]> = Vec::new();
-        let score = fast_adapt_lvl2(data.as_slice(), &dict, l.v, &mut key);
-        if score < best_score {
+        let mut key : Vec<Vec<u8>> = Vec::new();
+        let score = match model {
+            1 => fast_adapt_lvl1(data.as_slice(), &dict, l.v, &mut key),
+            2 => fast_adapt_lvl2(data.as_slice(), &dict, l.v, &mut key),
+            _ => {return;}
+        };
+        if score > best_score {
             best_key = key.clone();
             best_score = score;
         }
+        if verbose {
+            print!("{:.6} : {:3} : x = ", score, l.v);
+            for b in key[0].iter() {
+                print!("{:02x}", *b);
+            }
+            if key.len() > 1 {
+                print!(" a = ");
+                for b in key[1].iter() {
+                    print!("{:02x}", *b);
+                }
+            }
+            print!("\n");
+        }
     }
-    print!("{} : x = ", 1.0 - best_score);
-    for i in range(0, best_key.len()) {
-        print!("{:02x}", best_key[i][0]);
+    print!("Best key: {:.6} : {:3} : x = ", best_score, best_key[0].len());
+    for b in best_key[0].iter() {
+        print!("{:02x}", *b);
     }
-    print!(" a = ");
-    for i in range(0, best_key.len()) {
-        print!("{:02x}", best_key[i][1]);
+    if best_key.len() > 1 {
+        print!(" a = ");
+        for b in best_key[1].iter() {
+            print!("{:02x}", *b);
+        }
     }
     print!("\n");
 }
@@ -165,10 +224,11 @@ fn gen_lvl2_sub(x : u8, a : u8, sub : &mut [uint, ..256]) {
 }
 
 
-fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<u8>) -> f64 {
+fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
+    key.push(Vec::from_elem(l, 0u8));
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
@@ -182,23 +242,24 @@ fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<u8
         for i in range(0u, 256) {
             unigram[p][i] = freq[i] as f64 / sum as f64;
         }
-        key.push(0);
         for k in range(0u, 256) {
             gen_lvl1_sub(k as u8, &mut sub);
             let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
             if s < score[p] {
                 score[p] = s;
-                key[p] = k as u8;
+                key[0][p] = k as u8;
             }
         }
     }
-    return score.iter().fold(0f64, |a, &v| a + v);
+    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
 }
 
-fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<[u8, ..2]>) -> f64 {
+fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |i| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
+    key.push(Vec::from_elem(l, 0u8));
+    key.push(Vec::from_elem(l, 0u8));
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
@@ -212,18 +273,17 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<[u
         for i in range(0u, 256) {
             unigram[p][i] = freq[i] as f64 / sum as f64;
         }
-        key.push([0, 0]);
         for x in range(0u, 256) {
             for a in range(0u, 256) {
                 gen_lvl2_sub(x as u8, a as u8, &mut sub);
                 let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
                 if s < score[p] {
                     score[p] = s;
-                    key[p][0] = x as u8;
-                    key[p][1] = a as u8;
+                    key[0][p] = x as u8;
+                    key[1][p] = a as u8;
                 }
             }
         }
     }
-    return score.iter().fold(0f64, |a, &v| a + v);
+    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
 }
