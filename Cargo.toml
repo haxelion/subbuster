@@ -1,8 +1,8 @@
 [package]
 
 name = "subbuster"
-version = "0.0.1"
-authors = ["Charles Hubain <charles.hubain@haxelion.eu>"]
+version = "0.5.0"
+authors = ["Charles Hubain <github@haxelion.eu>"]
 
 [profile.release]
 opt-level = 3

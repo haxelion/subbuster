@@ -2,7 +2,6 @@ use std::os;
 use std::io::File;
 use std::io::BufferedReader;
 use std::num::Float;
-use std::str;
 use std::iter::IteratorExt;
 
 struct Probabilistic<T> {
@@ -12,15 +11,15 @@ struct Probabilistic<T> {
 
 struct Dictionary {
     words : Vec<Vec<u8>>,
-    unigram : [f64, ..256],
-    sort_order : [uint, ..256] 
+    unigram : [f64, ..256]
 }
 
 impl Dictionary {
     fn new() -> Dictionary {
-        Dictionary { words: Vec::new(),
-                     unigram : [0f64, ..256],
-                     sort_order : [0u, ..256]}
+        Dictionary {
+            words: Vec::new(),
+            unigram : [0f64, ..256]
+        }
     }
 }
 
@@ -255,7 +254,7 @@ fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
 }
 
 fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
-    let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |i| [0f64, ..256]);
+    let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
     key.push(Vec::from_elem(l, 0u8));
