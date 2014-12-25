@@ -79,7 +79,7 @@ fn main() {
                 Some(2) => Model::Level2,
                 Some(3) => Model::Level3,
                 _ => {
-                    println!("{} is not a valid model number", args[i]);
+                    println!("{} is not a valid model level", args[i]);
                     print_usage();
                     return;
                 }
@@ -117,7 +117,7 @@ fn main() {
         if verbose {
             println!("Lenght candidates: ");
             println!("------------------\n");
-            println!("P        | l");
+            println!("S        | l");
             for l in lenght.iter() {
                 println!("{:.6} : {}", l.p, l.v);
             }
@@ -131,7 +131,7 @@ fn main() {
     if verbose {
         println!("Key candidates:");
         println!("---------------\n");
-        println!("P        | l   | K");
+        println!("S        | l   | K");
     }
     for l in lenght.iter() {
         let mut key : Vec<Vec<u8>> = Vec::new();
@@ -172,7 +172,7 @@ fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<uint>>, 
                 let diff = (freq[i] as f64 / sum as f64)-(1f64/256f64);
                 var += diff*diff;
             }
-            lenght[l-1].p += var / (l as f64).powf(1.5);
+            lenght[l-1].p += 10f64 * var / (l as f64).powf(1.2);
         }
     }
     lenght.sort_by(|a, b| {
@@ -286,7 +286,7 @@ fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
             }
         }
     }
-    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
+    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
 
 fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
@@ -320,7 +320,7 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
             }
         }
     }
-    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
+    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
 
 fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
@@ -359,7 +359,7 @@ fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
             }
         }
     }
-    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
+    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
 
 fn print_key(key : &Vec<Vec<u8>>) {
