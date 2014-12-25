@@ -22,6 +22,8 @@ use std::io::File;
 use std::io::BufferedReader;
 use std::num::Float;
 use std::iter::IteratorExt;
+use std::iter::range_step;
+use std::thread::Thread;
 
 struct Probabilistic<T> {
     p : f64,
@@ -43,6 +45,14 @@ impl Dictionary {
 }
 
 enum Model {Level1, Level2, Level3}
+
+struct SBTask {
+    x : u8,
+    a : u8,
+    m : u16,
+    p : uint,
+    score : f64
+}
 
 fn print_usage() {
     println!("subbuster input output");
@@ -295,10 +305,10 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
     key.clear();
     key.push(Vec::from_elem(l, 0u8));
     key.push(Vec::from_elem(l, 0u8));
+    let (tx, rx) = channel::<SBTask>();
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
-        let mut sub = [0u, ..256];
         let mut sum = 0u64;
         while i < data.len() {
             sum += 1;
@@ -308,17 +318,37 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
         for i in range(0u, 256) {
             unigram[p][i] = freq[i] as f64 / sum as f64;
         }
-        for x in range(0u, 256) {
-            for a in range(0u, 256) {
-                gen_lvl2_sub(x as u8, a as u8, &mut sub);
-                let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
-                if s < score[p] {
-                    score[p] = s;
-                    key[0][p] = x as u8;
-                    key[1][p] = a as u8;
+    }
+    let (tx, rx) = channel::<SBTask>();
+    for p in range(0u, l) {
+        let tx = tx.clone();
+        let (u_tx, u_rx) = channel::<[f64, ..256]>();
+        u_tx.send(dict.unigram);
+        u_tx.send(unigram[p]);
+        Thread::spawn(move || {
+            let mut sub = [0u, ..256];
+            let mut res = SBTask {x : 0u8, a : 0u8, m : 0u16, p : p, score : 1f64};
+            let du = u_rx.recv();
+            let u = u_rx.recv();
+            for x in range(0u, 256) {
+                for a in range(0u, 256) {
+                    gen_lvl2_sub(x as u8, a as u8, &mut sub);
+                    let s = compute_unigram_var(&du, &u, &sub);
+                    if s < res.score {
+                        res.score = s;
+                        res.x = x as u8;
+                        res.a = a as u8;
+                    }
                 }
             }
-        }
+            tx.send(res);
+        }).detach();
+    }
+    for p in range(0u, l) {
+        let res = rx.recv();
+        score[res.p] = res.score;
+        key[0][res.p] = res.x as u8;
+        key[1][res.p] = res.a as u8;
     }
     return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
@@ -333,7 +363,6 @@ fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
-        let mut sub = [0u, ..256];
         let mut sum = 0u64;
         while i < data.len() {
             sum += 1;
@@ -343,19 +372,43 @@ fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
         for i in range(0u, 256) {
             unigram[p][i] = freq[i] as f64 / sum as f64;
         }
-        for x in range(0u, 256) {
-            for a in range(0u, 256) {
-                for m in range(0u, 40320) {
-                    gen_lvl3_sub(x as u8, a as u8, m as u16, &mut sub);
-                    let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
-                    if s < score[p] {
-                        score[p] = s;
-                        key[0][p] = x as u8;
-                        key[1][p] = a as u8;
-                        key[2][2*p] = (m >> 8) as u8;
-                        key[2][2*p+1] = (m & 0xff) as u8;
+        let n_cpus = os::num_cpus();
+        let (tx, rx) = channel::<SBTask>();
+        for i in range(0u, n_cpus) {
+            let tx = tx.clone();
+            let (u_tx, u_rx) = channel::<[f64, ..256]>();
+            u_tx.send(dict.unigram);
+            u_tx.send(unigram[p]);
+            Thread::spawn(move || {
+                let mut sub = [0u, ..256];
+                let mut res = SBTask {x : 0u8, a : 0u8, m : 0u16, p : p,score : 1f64};
+                let du = u_rx.recv();
+                let u = u_rx.recv();
+                for x in range_step(i, 256, n_cpus) {
+                    for a in range(0u, 256) {
+                        for m in range(0u, 40320) {
+                            gen_lvl3_sub(x as u8, a as u8, m as u16, &mut sub);
+                            let s = compute_unigram_var(&du, &u, &sub);
+                            if s < res.score {
+                                res.score = s;
+                                res.x = x as u8;
+                                res.a = a as u8;
+                                res.m = m as u16;
+                            }
+                        }
                     }
                 }
+                tx.send(res);
+            }).detach();
+        }
+        for i in range(0u, n_cpus) {
+            let res = rx.recv();
+            if res.score < score[p] {
+                score[p] = res.score;
+                key[0][p] = res.x as u8;
+                key[1][p] = res.a as u8;
+                key[2][2*p] = (res.m >> 8) as u8;
+                key[2][2*p+1] = (res.m & 0xff) as u8;
             }
         }
     }
