@@ -42,6 +42,8 @@ impl Dictionary {
     }
 }
 
+enum Model {Level1, Level2, Level3}
+
 fn print_usage() {
     println!("subbuster input output");
 }
@@ -51,7 +53,7 @@ fn main() {
     let mut dict = Dictionary::new();
     let mut lenght: Vec<Probabilistic<uint>> = Vec::new();
     let mut verbose = false;
-    let mut model = 1u;
+    let mut model = Model::Level1;
     let mut i : uint;
 
     if args.len() < 3 {
@@ -73,8 +75,9 @@ fn main() {
                 return;
             }
             model = match from_str::<uint>(args[i].as_slice()) {
-                Some(1) => 1,
-                Some(2) => 2,
+                Some(1) => Model::Level1,
+                Some(2) => Model::Level2,
+                Some(3) => Model::Level3,
                 _ => {
                     println!("{} is not a valid model number", args[i]);
                     print_usage();
@@ -126,45 +129,29 @@ fn main() {
     let mut best_key : Vec<Vec<u8>> = Vec::new();
     lenght.truncate(5);
     if verbose {
-        println!("Key candidates for model {}:", model);
-        println!("----------------------------\n");
+        println!("Key candidates:");
+        println!("---------------\n");
         println!("P        | l   | K");
     }
     for l in lenght.iter() {
         let mut key : Vec<Vec<u8>> = Vec::new();
         let score = match model {
-            1 => fast_adapt_lvl1(data.as_slice(), &dict, l.v, &mut key),
-            2 => fast_adapt_lvl2(data.as_slice(), &dict, l.v, &mut key),
-            _ => {return;}
+            Model::Level1 => fast_adapt_lvl1(data.as_slice(), &dict, l.v, &mut key),
+            Model::Level2 => fast_adapt_lvl2(data.as_slice(), &dict, l.v, &mut key),
+            Model::Level3 => fast_adapt_lvl3(data.as_slice(), &dict, l.v, &mut key),
         };
         if score > best_score {
             best_key = key.clone();
             best_score = score;
         }
         if verbose {
-            print!("{:.6} : {:3} : x = ", score, l.v);
-            for b in key[0].iter() {
-                print!("{:02x}", *b);
-            }
-            if key.len() > 1 {
-                print!(" a = ");
-                for b in key[1].iter() {
-                    print!("{:02x}", *b);
-                }
-            }
+            print!("{:.6} : {:3} : ", score, l.v);
+            print_key(&key);
             print!("\n");
         }
     }
-    print!("Best key: {:.6} : {:3} : x = ", best_score, best_key[0].len());
-    for b in best_key[0].iter() {
-        print!("{:02x}", *b);
-    }
-    if best_key.len() > 1 {
-        print!(" a = ");
-        for b in best_key[1].iter() {
-            print!("{:02x}", *b);
-        }
-    }
+    print!("Best key: {:.6} : {:3} : ", best_score, best_key[0].len());
+    print_key(&best_key);
     print!("\n");
 }
 
@@ -241,6 +228,36 @@ fn gen_lvl2_sub(x : u8, a : u8, sub : &mut [uint, ..256]) {
     }
 }
 
+fn gen_lvl3_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
+    let c = [40320u16, 5040u16, 720u16, 120u16, 24u16, 6u16, 2u16, 1u16, 1u16];
+    let mut used = [false, ..8];
+    let mut p = [0u, ..8];
+    for i in range(0u, 8u) {
+        p[i] = ((m%c[i])/c[i+1]+1) as uint;
+        for j in range(0u, 8) {
+            if used[j] == false {
+                p[i] -= 1u;
+            }
+            if p[i] == 0 {
+                p[i] = j;
+                used[j] = true;
+                break;
+            }
+        }
+    }
+    for i in range(0u, 256) {
+        let b = (i as u8 ^ x) + a;
+        sub[i] = ((b & 1u8) << p[0] |
+                 ((b & 2u8) >> 1u) << p[1] |
+                 ((b & 4u8) >> 2u) << p[2] |
+                 ((b & 8u8) >> 3u) << p[3] |
+                 ((b & 16u8) >> 4u) << p[4] |
+                 ((b & 32u8) >> 5u) << p[5] |
+                 ((b & 64u8) >> 6u) << p[6] |
+                 ((b & 128u8) >> 7u) << p[7]) as uint;
+    }
+}
+
 
 fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
@@ -304,4 +321,62 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
         }
     }
     return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
+}
+
+fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
+    let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
+    let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
+    key.clear();
+    key.push(Vec::from_elem(l, 0u8));
+    key.push(Vec::from_elem(l, 0u8));
+    key.push(Vec::from_elem(2*l, 0u8));
+    for p in range(0u, l) {
+        let mut i = p;
+        let mut freq = [0u64, ..256];
+        let mut sub = [0u, ..256];
+        let mut sum = 0u64;
+        while i < data.len() {
+            sum += 1;
+            freq[data[i] as uint] += 1; 
+            i += l;
+        }
+        for i in range(0u, 256) {
+            unigram[p][i] = freq[i] as f64 / sum as f64;
+        }
+        for x in range(0u, 256) {
+            for a in range(0u, 256) {
+                for m in range(0u, 40320) {
+                    gen_lvl3_sub(x as u8, a as u8, m as u16, &mut sub);
+                    let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
+                    if s < score[p] {
+                        score[p] = s;
+                        key[0][p] = x as u8;
+                        key[1][p] = a as u8;
+                        key[2][2*p] = (m >> 8) as u8;
+                        key[2][2*p+1] = (m & 0xff) as u8;
+                    }
+                }
+            }
+        }
+    }
+    return score.iter().fold(1f64, |a, &v| a - v*10f64/(l as f64).powf(1.5));
+}
+
+fn print_key(key : &Vec<Vec<u8>>) {
+    print!("x = ");
+    for b in key[0].iter() {
+        print!("{:02x}", *b);
+    }
+    if key.len() > 1 {
+        print!(" a = ");
+        for b in key[1].iter() {
+            print!("{:02x}", *b);
+        }
+    }
+    if key.len() > 2 {
+        print!(" m = ");
+        for b in key[2].iter() {
+            print!("{:02x}", *b);
+        }
+    }
 }

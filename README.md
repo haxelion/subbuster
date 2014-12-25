@@ -7,7 +7,9 @@ differences are:
 * The key lenght detection uses entropy instead of just counting the number of 
 equal bytes.
 * It aims to break any byte level substitution cipher, not just xor cipher. 
-Currently only xor and xor-add substitutions are implemented.
+Currently only xor, xor-add, xor-add-mix substitutions are implemented.
+
+For an example of the crypto it aims to break, see DummyCrypt.
  
 ## License ##
 
