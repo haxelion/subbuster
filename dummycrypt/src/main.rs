@@ -18,10 +18,31 @@ Copyright 2014 Charles Hubain <github@haxelion.eu>
 */
 
 use std::os;
+use std::vec::Vec;
+use std::cmp::max;
 use std::io::File;
 
 fn print_usage() {
-    println!("dummycrypt (-e|-d) [-x X] [-a A] input output");
+    println!("dummycrypt (-e|-d) [-x X] [-a A] [-m M] input output");
+    println!("");
+    println!("* -e: specify encryption mode");
+    println!("* -d: specify decryption mode");
+    println!("* -x: optional xor hex string of bytes");
+    println!("* -a: optional add hex string of bytes");
+    println!("* -m: optional mix hex string of big endian 16 bits unsigned integer");
+    println!("* input: input file name");
+    println!("* output: output file name");
+    println!("");
+    println!("The hex strings are padded with zeroes to the same number of elements.");
+    println!("");
+    println!("The elements of M represent any of the 40320 possible bijective bit mix ");
+    println!("operations, their encoding is described in the documentation.");
+    println!("");
+    println!("The cipher encryption algorithm for each byte b is  MIX(ADD(XOR(b,x),a),m)");
+    println!("where x, a, m are elements taken from X, A and M respectively and wrap around ");
+    println!("when the input is bigger than the key.");
+    println!("");
+    println!("Copyright 2014 Charles Hubain <github@haxelion.eu>");
 }
 
 enum Mode {Missing, Encrypt, Decrypt}
@@ -35,37 +56,56 @@ fn main() {
     let output = args.pop().unwrap();
     let input = args.pop().unwrap();
     let mut mode : Mode = Mode::Missing;
-    let mut x : Vec<u8> = Vec::new();
-    let mut a : Vec<u8> = Vec::new();
+    let mut key : Vec<Vec<u8>> = Vec::from_elem(3, Vec::<u8>::new());
     let mut i = 1u;
     while i < args.len() {
         let arg = args[i].as_slice();
         if arg == "-e" {
             mode = Mode::Encrypt;
-        } else if arg == "-d" {
+        }
+        else if arg == "-d" {
             mode = Mode::Decrypt;
-        } else if arg == "-x" {
+        }
+        else if arg == "-x" {
             i += 1;
-            hex_to_bytes(args[i].as_slice(), &mut x);
-        } else if arg == "-a" {
+            if i >= args.len() {
+                println!("You need to provide a xor hex string after -x");
+                print_usage();
+                return;
+            }
+            hex_to_bytes(args[i].as_slice(), &mut key[0]);
+        }
+        else if arg == "-a" {
             i += 1;
-            hex_to_bytes(args[i].as_slice(), &mut a);
-        } else {
+            if i >= args.len() {
+                println!("You need to provide an add hex string after -a");
+                print_usage();
+                return;
+            }
+            hex_to_bytes(args[i].as_slice(), &mut key[1]);
+        }
+        else if arg == "-m" {
+            i += 1;
+            if i >= args.len() {
+                println!("You need to provide a mix hex string after -m");
+                print_usage();
+                return;
+            }
+            hex_to_bytes(args[i].as_slice(), &mut key[2]);
+        }
+        else {
             print_usage();
             return;
         }
         i += 1;
     }
-    if x.is_empty() {
-        x.push(0u8);
-    }
-    if a.is_empty() {
-        a.push(0u8);
-    }
-
+    let lenght = max(key[0].len(), max(key[1].len(), key[2].len()/2));
+    key[0].resize(lenght, 0u8);
+    key[1].resize(lenght, 0u8);
+    key[2].resize(lenght*2, 0u8);
     match mode {
-        Mode::Encrypt => dummy_crypt_file(input.as_slice(), output.as_slice(), &x, &a),
-        Mode::Decrypt => dummy_decrypt_file(input.as_slice(), output.as_slice(), &x, &a),
+        Mode::Encrypt => dummy_crypt_file(input.as_slice(), output.as_slice(), &key),
+        Mode::Decrypt => dummy_decrypt_file(input.as_slice(), output.as_slice(), &key),
         Mode::Missing => print_usage(),
     };
 }
@@ -114,7 +154,48 @@ fn char_to_nibble(c : char) -> Option<u8> {
     }
 }
 
-fn dummy_crypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
+fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
+    let c = [40320u16, 5040u16, 720u16, 120u16, 24u16, 6u16, 2u16, 1u16, 1u16];
+    let mut used = [false, ..8];
+    let mut p = [0u, ..8];
+    for i in range(0u, 8u) {
+        p[i] = ((m%c[i])/c[i+1]+1) as uint;
+        for j in range(0u, 8) {
+            if used[j] == false {
+                p[i] -= 1u;
+            }
+            if p[i] == 0 {
+                p[i] = j;
+                used[j] = true;
+                break;
+            }
+        }
+    }
+    for i in range(0u, 256) {
+        let b = (i as u8 ^ x) + a;
+        sub[i] = ((b & 1u8) << p[0] |
+                 ((b & 2u8) >> 1u) << p[1] |
+                 ((b & 4u8) >> 2u) << p[2] |
+                 ((b & 8u8) >> 3u) << p[3] |
+                 ((b & 16u8) >> 4u) << p[4] |
+                 ((b & 32u8) >> 5u) << p[5] |
+                 ((b & 64u8) >> 6u) << p[6] |
+                 ((b & 128u8) >> 7u) << p[7]) as uint;
+    }
+}
+
+fn inv_sub(sub : &mut [uint, ..256]) {
+    let mut c = [0u, ..256];
+    for i in range(0u, 256) {
+        c[i] = sub[i];
+    }
+    for i in range(0u, 256) {
+        sub[c[i]] = i;
+    }
+}
+
+
+fn dummy_crypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
     let mut in_file = match File::open(&Path::new(input)) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open input file {}: {}!", input, e); return;}
@@ -124,6 +205,11 @@ fn dummy_crypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
     let mut buffer : [u8, ..1024] = [0, ..1024];
+    let mut sub : Vec<[uint, ..256]> = Vec::new();
+    for i in range(0u, key[0].len()) {
+        sub.push([0u, ..256]);
+        gen_sub(key[0][i], key[1][i], (key[2][2*i] as u16 << 8) + key[2][2*i+1] as u16, &mut sub[i]);
+    }
     let mut j = 0u;
     loop {
         let n = match in_file.read(&mut buffer) {
@@ -131,14 +217,14 @@ fn dummy_crypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
             Err(_) => { break; }
         };
         for i in range(0, n) {
-            buffer[i] = (buffer[i] ^ x[j % x.len()]) + a[j % a.len()];
+            buffer[i] = sub[j%sub.len()][buffer[i] as uint] as u8;
             j += 1;
         }
         out_file.write(buffer.slice(0, n));
     }
 }
 
-fn dummy_decrypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
+fn dummy_decrypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
     let mut in_file = match File::open(&Path::new(input)) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open input file {}: {}!", input, e); return;}
@@ -148,6 +234,12 @@ fn dummy_decrypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
     let mut buffer : [u8, ..1024] = [0, ..1024];
+    let mut sub : Vec<[uint, ..256]> = Vec::new();
+    for i in range(0u, key[0].len()) {
+        sub.push([0u, ..256]);
+        gen_sub(key[0][i], key[1][i], (key[2][2*i] as u16 << 8) + key[2][2*i+1] as u16, &mut sub[i]);
+        inv_sub(&mut sub[i]);
+    }
     let mut j = 0u;
     loop {
         let n = match in_file.read(&mut buffer) {
@@ -155,7 +247,7 @@ fn dummy_decrypt_file(input : &str, output : &str, x : &Vec<u8>, a : &Vec<u8>) {
             Err(_) => { break; }
         };
         for i in range(0, n) {
-            buffer[i] = (buffer[i] - a[j % a.len()]) ^ x[j % x.len()];
+            buffer[i] = sub[j%sub.len()][buffer[i] as uint] as u8;
             j += 1;
         }
         out_file.write(buffer.slice(0, n));
