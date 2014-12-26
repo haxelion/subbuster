@@ -47,11 +47,12 @@ computed.
 level 2 is xor-add, model level 3 is xor-add-mix.
 * -l: optional key lenght. If not provided, subbuster attempts to guess the key 
 lenght using entropy.
+* -k: optional maximum key lenght, default to 10.
 * -v: verbose mode, display the results from all the candidates.
 
-Warning: model level 3 is really slow (a few hours on a modern computer) 
-because it attempts to bruteforce all 2 642 411 520 key possibilites per byte. 
-A faster algorithm is planned.
+Warning: model level 3 is really slow because of the large key space 
+(2 642 411 520 key possibilites per byte). It is optimized to find solutions
+with high score and will abort if the solutions are too bad. 
 
 ## Why rust? ##
 

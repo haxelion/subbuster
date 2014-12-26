@@ -53,7 +53,7 @@ struct SBTask {
 }
 
 fn print_usage() {
-    println!("subbuster [-m [1|2|3]] [-l l] [-v] input sample");
+    println!("subbuster [-m [1|2|3]] [-l l] [-k k] [-v] input sample");
     println!("");
     println!("* input: input file to decipher.");
     println!("* sample: some plaintext sample from which byte the frequency distribution is ");
@@ -62,11 +62,12 @@ fn print_usage() {
     println!("level 2 is xor-add, model level 3 is xor-add-mix.");
     println!("* -l: optional key lenght. If not provided, subbuster attempts to guess the key ");
     println!("lenght using entropy.");
+    println!("* -k: optional maximum key lenght, default to 10.");
     println!("* -v: verbose mode, display the results from all the candidates.");
     println!("");
-    println!("Warning: model level 3 is really slow (a few hours on a modern computer) ");
-    println!("because it attempts to bruteforce all 2 642 411 520 key possibilites per byte. ");
-    println!("A faster algorithm is planned.");
+    println!("Warning: model level 3 is really slow because of the large key space ");
+    println!("(2 642 411 520 key possibilites per byte). It is optimized to find solutions");
+    println!("with high score and will abort if the solutions are too bad. ");
 }
 
 fn main() {
@@ -75,6 +76,7 @@ fn main() {
     let mut lenght: Vec<Probabilistic<uint>> = Vec::new();
     let mut verbose = false;
     let mut model = Model::Level1;
+    let mut max_lenght = 10u;
     let mut i : uint;
 
     if args.len() < 3 {
@@ -85,13 +87,29 @@ fn main() {
     let input = args.pop().unwrap();
     i = 0;
     while i < args.len() {
-        if args[i].as_slice() == "-v" {
+        if args[i].as_slice() == "-k" {
+            i += 1;
+            if i >= args.len() {
+                println!("No maximum key lenght given");
+                print_usage();
+                return;
+            }
+            max_lenght = match args[i].as_slice().parse() {
+                Some(m) => { m },
+                None => {
+                    println!("{} is not a valid maximum key lenght", args[i]);
+                    print_usage();
+                    return;
+                }
+            }
+        }
+        else if args[i].as_slice() == "-v" {
             verbose = true;
         }
         else if args[i].as_slice() == "-m" {
             i += 1;
             if i >= args.len() {
-                println!("No model number given");
+                println!("No model level number given");
                 print_usage();
                 return;
             }
@@ -134,7 +152,7 @@ fn main() {
     };
 
     if lenght.is_empty() {
-        find_lenght_candidates(data.as_slice(), &mut lenght, 10);
+        find_lenght_candidates(data.as_slice(), &mut lenght, max_lenght);
         if verbose {
             println!("Lenght candidates: ");
             println!("------------------\n");
