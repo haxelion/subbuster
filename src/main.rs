@@ -449,7 +449,7 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
             res.score = 1f64;
             for i in range(0u,candidates.len()) {
                 let ref c = candidates[i];
-                if c.p > res.score {
+                if c.p > res.score || c.p > 0.01{
                     break;
                 }
                 for m in range(0u, 40320) {
