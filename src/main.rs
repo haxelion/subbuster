@@ -63,7 +63,7 @@ fn print_usage() {
     println!("level 2 is xor-add, model level 3 is xor-add-mix.");
     println!("* -l: optional key lenght. If not provided, subbuster attempts to guess the key ");
     println!("lenght using entropy.");
-    println!("* -v: verbose mode, the results from all the candidates");
+    println!("* -v: verbose mode, display the results from all the candidates.");
     println!("");
     println!("Warning: model level 3 is really slow (a few hours on a modern computer) ");
     println!("because it attempts to bruteforce all 2 642 411 520 key possibilites per byte. ");

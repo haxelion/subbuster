@@ -47,7 +47,7 @@ computed.
 level 2 is xor-add, model level 3 is xor-add-mix.
 * -l: optional key lenght. If not provided, subbuster attempts to guess the key 
 lenght using entropy.
-* -v: verbose mode, the results from all the candidates
+* -v: verbose mode, display the results from all the candidates.
 
 Warning: model level 3 is really slow (a few hours on a modern computer) 
 because it attempts to bruteforce all 2 642 411 520 key possibilites per byte. 
