@@ -199,7 +199,7 @@ fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<uint>>, 
                 let diff = (freq[i] as f64 / sum as f64)-(1f64/256f64);
                 var += diff*diff;
             }
-            lenght[l-1].p += 10f64 * var / (l as f64).powf(1.2);
+            lenght[l-1].p += var.sqrt() / (l as f64).powf(1.2);
         }
     }
     lenght.sort_by(|a, b| {
@@ -308,7 +308,7 @@ fn break_lvl1(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
             }
         }
     }
-    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
+    return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
 }
 
 fn break_lvl2(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
@@ -361,7 +361,7 @@ fn break_lvl2(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
         key[0][res.p] = res.x as u8;
         key[1][res.p] = res.a as u8;
     }
-    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
+    return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
 }
 
 fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
@@ -423,7 +423,7 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
             }
         }
     }
-    return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
+    return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
 }
 
 fn print_key(key : &Vec<Vec<u8>>) {
