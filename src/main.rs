@@ -198,7 +198,7 @@ fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<uint>>, 
                 let diff = (freq[i] as f64 / sum as f64)-(1f64/256f64);
                 var += diff*diff;
             }
-            lenght[l-1].p += var.sqrt() / (l as f64).powf(1.2);
+            lenght[l-1].p += var.sqrt() / (l as f64).powf(1.1);
         }
     }
     lenght.sort_by(|a, b| {
