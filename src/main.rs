@@ -21,7 +21,6 @@ use std::os;
 use std::io::File;
 use std::num::Float;
 use std::iter::IteratorExt;
-use std::iter::range_step;
 use std::thread::Thread;
 
 struct Probabilistic<T> {
@@ -238,6 +237,46 @@ fn compute_unigram_var(u1 : &[f64, ..256], u2 : &[f64, ..256], s : &[uint, ..256
     return cost;
 }
 
+fn compute_hamming_weight(a : u8) -> u8 {
+    (a & 1u8) + ((a & 2u8) >> 1) + ((a & 4u8) >> 2) + ((a & 8u8) >> 3) +
+    ((a & 16u8) >> 4) + ((a & 32u8) >> 5) + ((a & 64u8) >> 6) + ((a & 128u8) >> 7)
+}
+
+fn compute_hamming_var(u1 : &[f64, ..256], u2 : &[f64, ..256], s : &[uint, ..256]) -> f64 {
+    let mut cost : f64 = 0f64;
+    let mut p1 : Vec<Probabilistic<u8>> = Vec::from_fn(256, |_| Probabilistic{p : 0f64, v : 0u8});
+    let mut p2 : Vec<Probabilistic<u8>> = Vec::from_fn(256, |_| Probabilistic{p : 0f64, v : 0u8});
+    for i in range(0u, 256) {
+        p1[i].v = compute_hamming_weight(s[i] as u8);
+        p1[i].p = u1[i];
+        p2[i].v = compute_hamming_weight(i as u8);
+        p2[i].p = u2[i];
+    }
+    p1.sort_by( |a, b| {
+        if a.v < b.v { Less }
+        else if a.v > b.v { Greater }
+        else {
+            if a.p < b.p { Less }
+            else if a.p > b.p { Greater }
+            else { Equal }
+        }
+    });
+    p2.sort_by( |a, b| {
+        if a.v < b.v { Less }
+        else if a.v > b.v { Greater }
+        else {
+            if a.p < b.p { Less }
+            else if a.p > b.p { Greater }
+            else { Equal }
+        }
+    });
+    for i in range(0u, 256) {
+        let c = p1[i].p - p2[i].p;
+        cost += c*c;
+    }
+    return cost;
+}
+
 fn gen_lvl1_sub(x : u8, sub : &mut [uint, ..256]) {
     for i in range(0u, 256) {
         sub[i] = i ^ x as uint;
@@ -270,16 +309,15 @@ fn gen_lvl3_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
     for i in range(0u, 256) {
         let b = (i as u8 ^ x) + a;
         sub[i] = ((b & 1u8) << p[0] |
-                 ((b & 2u8) >> 1u) << p[1] |
-                 ((b & 4u8) >> 2u) << p[2] |
-                 ((b & 8u8) >> 3u) << p[3] |
-                 ((b & 16u8) >> 4u) << p[4] |
-                 ((b & 32u8) >> 5u) << p[5] |
-                 ((b & 64u8) >> 6u) << p[6] |
-                 ((b & 128u8) >> 7u) << p[7]) as uint;
+                 ((b & 2u8) >> 1) << p[1] |
+                 ((b & 4u8) >> 2) << p[2] |
+                 ((b & 8u8) >> 3) << p[3] |
+                 ((b & 16u8) >> 4) << p[4] |
+                 ((b & 32u8) >> 5) << p[5] |
+                 ((b & 64u8) >> 6) << p[6] |
+                 ((b & 128u8) >> 7) << p[7]) as uint;
     }
 }
-
 
 fn break_lvl1(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
@@ -383,45 +421,58 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
         for i in range(0u, 256) {
             unigram[p][i] = freq[i] as f64 / sum as f64;
         }
-        let n_cpus = os::num_cpus();
-        let (tx, rx) = channel::<SBTask>();
-        for i in range(0u, n_cpus) {
-            let tx = tx.clone();
-            let (u_tx, u_rx) = channel::<[f64, ..256]>();
-            u_tx.send(sample.unigram);
-            u_tx.send(unigram[p]);
-            Thread::spawn(move || {
-                let mut sub = [0u, ..256];
-                let mut res = SBTask {x : 0u8, a : 0u8, m : 0u16, p : p,score : 1f64};
-                let du = u_rx.recv();
-                let u = u_rx.recv();
-                for x in range_step(i, 256, n_cpus) {
-                    for a in range(0u, 256) {
-                        for m in range(0u, 40320) {
-                            gen_lvl3_sub(x as u8, a as u8, m as u16, &mut sub);
-                            let s = compute_unigram_var(&du, &u, &sub);
-                            if s < res.score {
-                                res.score = s;
-                                res.x = x as u8;
-                                res.a = a as u8;
-                                res.m = m as u16;
-                            }
-                        }
+    }
+    let (tx, rx) = channel::<SBTask>();
+    for p in range(0u, l) {
+        let tx = tx.clone();
+        let (u_tx, u_rx) = channel::<[f64, ..256]>();
+        u_tx.send(sample.unigram);
+        u_tx.send(unigram[p]);
+        Thread::spawn(move || {
+            let mut sub = [0u, ..256];
+            let mut res = SBTask {x : 0u8, a : 0u8, m : 0u16, p : p,score : 1f64};
+            let mut candidates : Vec<Probabilistic<[u8, ..2]>> = Vec::new();
+            let du = u_rx.recv();
+            let u = u_rx.recv();
+            for x in range(0u, 256) {
+                for a in range(0u, 256) {
+                    gen_lvl2_sub(x as u8, a as u8, &mut sub);
+                    let s = compute_hamming_var(&du, &u, &sub);
+                    candidates.push(Probabilistic{p : s, v : [x as u8, a as u8]});
+                }
+            }
+            candidates.sort_by(|a, b| {
+                if a.p < b.p { Less }
+                else if a.p > b.p { Greater }
+                else { Equal }
+            });
+            res.score = 1f64;
+            for i in range(0u,candidates.len()) {
+                let ref c = candidates[i];
+                if c.p > res.score || c.p > 0.01{
+                    break;
+                }
+                for m in range(0u, 40320) {
+                    gen_lvl3_sub(c.v[0], c.v[1], m as u16, &mut sub);
+                    let s = compute_unigram_var(&du, &u, &sub);
+                    if s < res.score {
+                        res.score = s;
+                        res.x = c.v[0];
+                        res.a = c.v[1];
+                        res.m = m as u16;
                     }
                 }
-                tx.send(res);
-            }).detach();
-        }
-        for i in range(0u, n_cpus) {
-            let res = rx.recv();
-            if res.score < score[p] {
-                score[p] = res.score;
-                key[0][p] = res.x as u8;
-                key[1][p] = res.a as u8;
-                key[2][2*p] = (res.m >> 8) as u8;
-                key[2][2*p+1] = (res.m & 0xff) as u8;
             }
-        }
+            tx.send(res);
+        }).detach();
+    }
+    for p in range(0u, l) {
+        let res = rx.recv();
+        score[res.p] = res.score;
+        key[0][res.p] = res.x as u8;
+        key[1][res.p] = res.a as u8;
+        key[2][2*res.p] = (res.m >> 8) as u8;
+        key[2][2*res.p+1] = (res.m & 0xff) as u8;
     }
     return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
 }
