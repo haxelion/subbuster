@@ -19,7 +19,6 @@ Copyright 2014 Charles Hubain <github@haxelion.eu>
 
 use std::os;
 use std::io::File;
-use std::io::BufferedReader;
 use std::num::Float;
 use std::iter::IteratorExt;
 use std::iter::range_step;
@@ -30,15 +29,15 @@ struct Probabilistic<T> {
     v : T,
 }
 
-struct Dictionary {
-    words : Vec<Vec<u8>>,
+struct Sample {
+    data : Vec<u8>,
     unigram : [f64, ..256]
 }
 
-impl Dictionary {
-    fn new() -> Dictionary {
-        Dictionary {
-            words: Vec::new(),
+impl Sample {
+    fn new() -> Sample {
+        Sample {
+            data: Vec::new(),
             unigram : [0f64, ..256]
         }
     }
@@ -55,12 +54,25 @@ struct SBTask {
 }
 
 fn print_usage() {
-    println!("subbuster input output");
+    println!("subbuster [-m [1|2|3]] [-l l] [-v] input sample");
+    println!("");
+    println!("* input: input file to decipher.");
+    println!("* sample: some plaintext sample from which byte the frequency distribution is ");
+    println!("computed.");
+    println!("* -m: optional model level number, default to 1. Model level 1 is xor, model ");
+    println!("level 2 is xor-add, model level 3 is xor-add-mix.");
+    println!("* -l: optional key lenght. If not provided, subbuster attempts to guess the key ");
+    println!("lenght using entropy.");
+    println!("* -v: verbose mode, the results from all the candidates");
+    println!("");
+    println!("Warning: model level 3 is really slow (a few hours on a modern computer) ");
+    println!("because it attempts to bruteforce all 2 642 411 520 key possibilites per byte. ");
+    println!("A faster algorithm is planned.");
 }
 
 fn main() {
     let mut args: Vec<String> = os::args();
-    let mut dict = Dictionary::new();
+    let mut sample = Sample::new();
     let mut lenght: Vec<Probabilistic<uint>> = Vec::new();
     let mut verbose = false;
     let mut model = Model::Level1;
@@ -70,7 +82,7 @@ fn main() {
         print_usage();
         return;
     }
-    let dictionary_path = args.pop().unwrap();
+    let sample_path = args.pop().unwrap();
     let input = args.pop().unwrap();
     i = 0;
     while i < args.len() {
@@ -84,10 +96,10 @@ fn main() {
                 print_usage();
                 return;
             }
-            model = match from_str::<uint>(args[i].as_slice()) {
-                Some(1) => Model::Level1,
-                Some(2) => Model::Level2,
-                Some(3) => Model::Level3,
+            model = match args[i].as_slice().parse() {
+                Some(1u) => Model::Level1,
+                Some(2u) => Model::Level2,
+                Some(3u) => Model::Level3,
                 _ => {
                     println!("{} is not a valid model level", args[i]);
                     print_usage();
@@ -102,7 +114,7 @@ fn main() {
                 print_usage();
                 return;
             }
-            match from_str::<uint>(args[i].as_slice()) {
+            match args[i].as_slice().parse() {
                 Some(l) => {
                     lenght.push(Probabilistic {p : 1f64, v : l});
                 },
@@ -116,7 +128,7 @@ fn main() {
         i += 1;
     }
 
-    read_dictionary(dictionary_path.as_slice(), &mut dict);
+    read_sample(sample_path.as_slice(), &mut sample);
     let data  = match File::open(&Path::new(input.as_slice())).read_to_end() {
         Ok(d) => { d },
         Err(e) => {println!("Could not read input file: {}", e); return;}
@@ -146,9 +158,9 @@ fn main() {
     for l in lenght.iter() {
         let mut key : Vec<Vec<u8>> = Vec::new();
         let score = match model {
-            Model::Level1 => fast_adapt_lvl1(data.as_slice(), &dict, l.v, &mut key),
-            Model::Level2 => fast_adapt_lvl2(data.as_slice(), &dict, l.v, &mut key),
-            Model::Level3 => fast_adapt_lvl3(data.as_slice(), &dict, l.v, &mut key),
+            Model::Level1 => break_lvl1(data.as_slice(), &sample, l.v, &mut key),
+            Model::Level2 => break_lvl2(data.as_slice(), &sample, l.v, &mut key),
+            Model::Level3 => break_lvl3(data.as_slice(), &sample, l.v, &mut key),
         };
         if score > best_score {
             best_key = key.clone();
@@ -160,6 +172,11 @@ fn main() {
             print!("\n");
         }
     }
+
+    if verbose {
+        print!("\n");
+    }
+
     print!("Best key: {:.6} : {:3} : ", best_score, best_key[0].len());
     print_key(&best_key);
     print!("\n");
@@ -192,28 +209,23 @@ fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<uint>>, 
     });
 }
 
-fn read_dictionary(path : &str, dict : &mut Dictionary)
+fn read_sample(path : &str, sample : &mut Sample)
 {
-    let file  = match File::open(&Path::new(path.as_slice())) {
-        Ok(f) => { f },
-        Err(e) => {println!("Could not read dictionary file: {}", e); return;}
+    sample.data = match File::open(&Path::new(path.as_slice())).read_to_end() {
+        Ok(d) => { d },
+        Err(e) => {
+            println!("Could not read sample file: {}", e);
+            panic!();
+        }
     };
-    let mut reader = BufferedReader::new(file);
     let mut freq = [0u64, ..256];
     let mut sum = 0u64;
-    loop {
-        let line = match reader.read_line() {
-            Ok(l) => { l.into_bytes() },
-            Err(_) => { break; }
-        };
-        dict.words.push(line.clone());
-        for c in line.iter() {
-            sum += 1;
-            freq[*c as uint] += 1;
-        }
-    }   
+    for c in sample.data.iter() {
+        sum += 1;
+        freq[*c as uint] += 1;
+    }
     for i in range(0u, 256) {
-        dict.unigram[i] = freq[i] as f64 / sum as f64;
+        sample.unigram[i] = freq[i] as f64 / sum as f64;
     }
 }
 
@@ -269,7 +281,7 @@ fn gen_lvl3_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
 }
 
 
-fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
+fn break_lvl1(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
@@ -289,7 +301,7 @@ fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
         }
         for k in range(0u, 256) {
             gen_lvl1_sub(k as u8, &mut sub);
-            let s = compute_unigram_var(&dict.unigram, &unigram[p], &sub);
+            let s = compute_unigram_var(&sample.unigram, &unigram[p], &sub);
             if s < score[p] {
                 score[p] = s;
                 key[0][p] = k as u8;
@@ -299,13 +311,12 @@ fn fast_adapt_lvl1(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
     return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
 
-fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
+fn break_lvl2(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
     key.push(Vec::from_elem(l, 0u8));
     key.push(Vec::from_elem(l, 0u8));
-    let (tx, rx) = channel::<SBTask>();
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
@@ -323,7 +334,7 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
     for p in range(0u, l) {
         let tx = tx.clone();
         let (u_tx, u_rx) = channel::<[f64, ..256]>();
-        u_tx.send(dict.unigram);
+        u_tx.send(sample.unigram);
         u_tx.send(unigram[p]);
         Thread::spawn(move || {
             let mut sub = [0u, ..256];
@@ -353,7 +364,7 @@ fn fast_adapt_lvl2(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
     return score.iter().fold(1f64, |a, &v| a - 10f64 * v / l as f64);
 }
 
-fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
+fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
     let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
     let mut score : Vec<f64> = Vec::from_elem(l, 1f64);
     key.clear();
@@ -377,7 +388,7 @@ fn fast_adapt_lvl3(data : &[u8], dict : &Dictionary, l : uint, key : &mut Vec<Ve
         for i in range(0u, n_cpus) {
             let tx = tx.clone();
             let (u_tx, u_rx) = channel::<[f64, ..256]>();
-            u_tx.send(dict.unigram);
+            u_tx.send(sample.unigram);
             u_tx.send(unigram[p]);
             Thread::spawn(move || {
                 let mut sub = [0u, ..256];

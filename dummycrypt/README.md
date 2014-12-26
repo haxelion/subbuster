@@ -6,6 +6,27 @@
 
 *ITS ONLY USE IS TO GENERATE BAD CRYPTO TEST VECTORS*
 
+## Compilation ##
+
+You need the latest [cargo](https://crates.io) and 
+[rust](http://www.rust-lang.org/) nightlies. Although it's a bit annoying, the 
+easiest way is by running:
+
+```sh
+curl -sS https://static.rust-lang.org/rustup.sh | sudo bash
+```
+
+This will change when rust 1.0 is out.
+
+To compile:
+
+```sh
+cd subbuster/dummycrypt
+cargo build --release
+```
+
+The resulting binary will be dummycrypt/target/release/dummycrypt.
+ 
 ## Usage ##
 
 dummycrypt (-e|-d) [-x X] [-a A] [-m M] input output
