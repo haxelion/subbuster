@@ -199,9 +199,14 @@ fn main() {
         print!("\n");
     }
 
-    print!("Best key: {:.6} : {:3} : ", best_score, best_key[0].len());
-    print_key(&best_key);
-    print!("\n");
+    if best_score != 0f64 {
+        print!("Best key: {:.6} : {:3} : ", best_score, best_key[0].len());
+        print_key(&best_key);
+        print!("\n");
+    }
+    else {
+        println!("No key found.");
+    }
 }
 
 fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<uint>>, max_l : uint) {
