@@ -185,7 +185,7 @@ fn main() {
         }
         if verbose {
             if score == 0f64 {
-                print!("ABORTED : {:3} : ", l.v);
+                print!("ABORTED  : {:3} : ", l.v);
             }
             else {
                 print!("{:.6} : {:3} : ", score, l.v);
@@ -470,9 +470,9 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
                 else { Equal }
             });
             res.score = 1f64;
-            for i in range(0u, 200) {
+            for i in range(0u, 40) {
                 let ref c = candidates[i];
-                if c.p > res.score {
+                if c.p > res.score || c.p > 0.01{
                     break;
                 }
                 for m in range(0u, 40320) {
@@ -489,16 +489,20 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
             tx.send(res);
         }).detach();
     }
+    let mut aborted = false;
     for p in range(0u, l) {
         let res = rx.recv();
-        if res.score == 0f64 {
-            return 0f64;
+        if res.score == 1f64 {
+            aborted = true;
         }
         score[res.p] = res.score;
         key[0][res.p] = res.x as u8;
         key[1][res.p] = res.a as u8;
         key[2][2*res.p] = (res.m >> 8) as u8;
         key[2][2*res.p+1] = (res.m & 0xff) as u8;
+    }
+    if aborted {
+        return 0f64;
     }
     return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
 }

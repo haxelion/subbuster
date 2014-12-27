@@ -54,6 +54,47 @@ Warning: model level 3 is really slow because of the large key space
 (2 642 411 520 key possibilites per byte). It is optimized to find solutions
 with high score and will abort if the solutions are too bad. 
 
+## Example ##
+
+```sh
+wget -O rust.html "http://en.wikipedia.org/wiki/Rust_%28programming_language%29"
+wget -O crypto.html "http://en.wikipedia.org/wiki/Cryptography"
+./dummycrypt/target/release/dummycrypt -e -x 13374242 -a deadbeef -m 0102030405060708 crypto.html crypto.ciphered
+./target/release/subbuster -v -m 3 crypto.ciphered rust.html 
+```
+
+Output:
+
+```raw
+Lenght candidates: 
+------------------
+
+S        | l
+0.155691 : 4
+0.145305 : 8
+0.115363 : 2
+0.103409 : 6
+0.098324 : 10
+0.085061 : 1
+0.076248 : 3
+0.072502 : 5
+0.070133 : 7
+0.068449 : 9
+
+
+Key candidates:
+---------------
+
+S        | l   | K
+0.972984 :   4 : x = 13374242 a = deadbeef m = 0102030405060708
+0.972671 :   8 : x = 1337424213374242 a = deadbeefdeadbeef m = 01020304050607080102030405060708
+0.849390 :   2 : x = 2a06 a = 36db m = 03d66ae8
+0.847706 :   6 : x = 2a062a492a06 a = 36db36df36db m = 03d66ae803d60cc403d66ae8
+0.847886 :  10 : x = 2a1770062a062a054d06 a = 36d4c0db36db36da98db m = 03d646e804886ae803d66ae803d6667a286a6ae8
+
+Best key: 0.972984 :   4 : x = 13374242 a = deadbeef m = 0102030405060708
+```
+
 ## Why rust? ##
 
 I know it's a pain to install a compiler and runtime just for this program.
