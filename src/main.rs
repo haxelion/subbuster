@@ -42,7 +42,7 @@ impl Sample {
     }
 }
 
-enum Model {Level1, Level2, Level3}
+enum Model {Level1, Level2, Level3, Level4}
 
 struct SBTask {
     x : u8,
@@ -117,6 +117,7 @@ fn main() {
                 Some(1u) => Model::Level1,
                 Some(2u) => Model::Level2,
                 Some(3u) => Model::Level3,
+                Some(4u) => Model::Level4,
                 _ => {
                     println!("{} is not a valid model level", args[i]);
                     print_usage();
@@ -178,6 +179,7 @@ fn main() {
             Model::Level1 => break_lvl1(data.as_slice(), &sample, l.v, &mut key),
             Model::Level2 => break_lvl2(data.as_slice(), &sample, l.v, &mut key),
             Model::Level3 => break_lvl3(data.as_slice(), &sample, l.v, &mut key),
+            Model::Level4 => break_lvl4(data.as_slice(), &sample, l.v, &mut key),
         };
         if score > best_score {
             best_key = key.clone();
@@ -510,6 +512,26 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
         return 0f64;
     }
     return score.iter().fold(1f64, |a, &v| a - v.sqrt() / l as f64);
+}
+
+fn break_lvl4(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
+    let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
+    key.clear();
+    key.grow(l, Vec::from_elem(256, 0u8);
+    for p in range(0u, l) {
+        let mut i = p;
+        let mut freq = [0u64, ..256];
+        let mut sum = 0u64;
+        while i < data.len() {
+            sum += 1;
+            freq[data[i] as uint] += 1; 
+            i += l;
+        }
+        for i in range(0u, 256) {
+            unigram[p][i] = freq[i] as f64 / sum as f64;
+        }
+    }
+    return 0f64;
 }
 
 fn print_key(key : &Vec<Vec<u8>>) {
