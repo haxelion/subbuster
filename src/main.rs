@@ -184,7 +184,12 @@ fn main() {
             best_score = score;
         }
         if verbose {
-            print!("{:.6} : {:3} : ", score, l.v);
+            if score == 0f64 {
+                print!("ABORTED : {:3} : ", l.v);
+            }
+            else {
+                print!("{:.6} : {:3} : ", score, l.v);
+            }
             print_key(&key);
             print!("\n");
         }
@@ -465,9 +470,9 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
                 else { Equal }
             });
             res.score = 1f64;
-            for i in range(0u,candidates.len()) {
+            for i in range(0u, 200) {
                 let ref c = candidates[i];
-                if c.p > res.score || c.p > 0.01{
+                if c.p > res.score {
                     break;
                 }
                 for m in range(0u, 40320) {
@@ -486,6 +491,9 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
     }
     for p in range(0u, l) {
         let res = rx.recv();
+        if res.score == 0f64 {
+            return 0f64;
+        }
         score[res.p] = res.score;
         key[0][res.p] = res.x as u8;
         key[1][res.p] = res.a as u8;
