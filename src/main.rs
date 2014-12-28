@@ -515,9 +515,19 @@ fn break_lvl3(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
 }
 
 fn break_lvl4(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>) -> f64 {
-    let mut unigram : Vec<[f64, ..256]> = Vec::from_fn(l, |_| [0f64, ..256]);
+    let mut unigram : Vec<Vec<Probabilistic<u8>>> = Vec::from_fn(l, |_| Vec::from_fn(256, |_| Probabilistic {p : 0f64, v : 0u8}));
+    let mut su : Vec<Probabilistic<u8>> = Vec::from_fn(256, |_| Probabilistic {p : 0f64, v : 0u8});
     key.clear();
-    key.grow(l, Vec::from_elem(256, 0u8);
+    key.grow(l, Vec::from_elem(256, 0u8));
+    for i in range(0u, 256) {
+        su[i].v = i as u8;
+        su[i].p = sample.unigram[i];
+    }
+    su.sort_by( |a, b| {
+        if b.p < a.p { Less }
+        else if b.p > a.p { Greater }
+        else { Equal }
+    });
     for p in range(0u, l) {
         let mut i = p;
         let mut freq = [0u64, ..256];
@@ -528,7 +538,16 @@ fn break_lvl4(data : &[u8], sample : &Sample, l : uint, key : &mut Vec<Vec<u8>>)
             i += l;
         }
         for i in range(0u, 256) {
-            unigram[p][i] = freq[i] as f64 / sum as f64;
+            unigram[p][i].v = i as u8;
+            unigram[p][i].p = freq[i] as f64 / sum as f64;
+        }
+        unigram[p].sort_by( |a, b| {
+            if b.p < a.p { Less }
+            else if b.p > a.p { Greater }
+            else { Equal }
+        });
+        for i in range(0u, 256) {
+            key[p][su[i].v as uint] = unigram[p][i].v;
         }
     }
     return 0f64;
