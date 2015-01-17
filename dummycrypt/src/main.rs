@@ -19,6 +19,7 @@ Copyright 2014 Charles Hubain <github@haxelion.eu>
 
 use std::os;
 use std::vec::Vec;
+use std::iter::repeat;
 use std::cmp::max;
 use std::io::File;
 
@@ -56,10 +57,10 @@ fn main() {
     let output = args.pop().unwrap();
     let input = args.pop().unwrap();
     let mut mode : Mode = Mode::Missing;
-    let mut key : Vec<Vec<u8>> = Vec::from_elem(3, Vec::<u8>::new());
-    let mut i = 1u;
+    let mut key : Vec<Vec<u8>> = repeat(Vec::<u8>::new()).take(3).collect();
+    let mut i = 1us;
     while i < args.len() {
-        let arg = args[i].as_slice();
+        let arg = &args[i][];
         if arg == "-e" {
             mode = Mode::Encrypt;
         }
@@ -73,7 +74,7 @@ fn main() {
                 print_usage();
                 return;
             }
-            hex_to_bytes(args[i].as_slice(), &mut key[0]);
+            hex_to_bytes(&args[i][], &mut key[0]);
         }
         else if arg == "-a" {
             i += 1;
@@ -82,7 +83,7 @@ fn main() {
                 print_usage();
                 return;
             }
-            hex_to_bytes(args[i].as_slice(), &mut key[1]);
+            hex_to_bytes(&args[i][], &mut key[1]);
         }
         else if arg == "-m" {
             i += 1;
@@ -91,7 +92,7 @@ fn main() {
                 print_usage();
                 return;
             }
-            hex_to_bytes(args[i].as_slice(), &mut key[2]);
+            hex_to_bytes(&args[i][], &mut key[2]);
         }
         else {
             print_usage();
@@ -104,14 +105,14 @@ fn main() {
     key[1].resize(lenght, 0u8);
     key[2].resize(lenght*2, 0u8);
     match mode {
-        Mode::Encrypt => dummy_crypt_file(input.as_slice(), output.as_slice(), &key),
-        Mode::Decrypt => dummy_decrypt_file(input.as_slice(), output.as_slice(), &key),
+        Mode::Encrypt => dummy_crypt_file(&input[], &output[], &key),
+        Mode::Decrypt => dummy_decrypt_file(&input[], &output[], &key),
         Mode::Missing => print_usage(),
     };
 }
 
 fn hex_to_bytes(h : &str, b :  &mut Vec<u8>) {
-    let mut i = 0u;
+    let mut i = 0us;
     while i < h.len()-1 {
         let n1 = match char_to_nibble(h.char_at(i)) {
             Some(n) => { n },
@@ -154,15 +155,15 @@ fn char_to_nibble(c : char) -> Option<u8> {
     }
 }
 
-fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
+fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [usize; 256]) {
     let c = [40320u16, 5040u16, 720u16, 120u16, 24u16, 6u16, 2u16, 1u16, 1u16];
-    let mut used = [false, ..8];
-    let mut p = [0u, ..8];
-    for i in range(0u, 8u) {
-        p[i] = ((m%c[i])/c[i+1]+1) as uint;
-        for j in range(0u, 8) {
+    let mut used = [false; 8];
+    let mut p = [0us; 8];
+    for i in (0us.. 8) {
+        p[i] = ((m%c[i])/c[i+1]+1) as usize;
+        for j in (0us..8) {
             if used[j] == false {
-                p[i] -= 1u;
+                p[i] -= 1us;
             }
             if p[i] == 0 {
                 p[i] = j;
@@ -171,25 +172,25 @@ fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [uint, ..256]) {
             }
         }
     }
-    for i in range(0u, 256) {
+    for i in (0us..256) {
         let b = (i as u8 ^ x) + a;
         sub[i] = ((b & 1u8) << p[0] |
-                 ((b & 2u8) >> 1u) << p[1] |
-                 ((b & 4u8) >> 2u) << p[2] |
-                 ((b & 8u8) >> 3u) << p[3] |
-                 ((b & 16u8) >> 4u) << p[4] |
-                 ((b & 32u8) >> 5u) << p[5] |
-                 ((b & 64u8) >> 6u) << p[6] |
-                 ((b & 128u8) >> 7u) << p[7]) as uint;
+                 ((b & 2u8) >> 1) << p[1] |
+                 ((b & 4u8) >> 2) << p[2] |
+                 ((b & 8u8) >> 3) << p[3] |
+                 ((b & 16u8) >> 4) << p[4] |
+                 ((b & 32u8) >> 5) << p[5] |
+                 ((b & 64u8) >> 6) << p[6] |
+                 ((b & 128u8) >> 7) << p[7]) as usize;
     }
 }
 
-fn inv_sub(sub : &mut [uint, ..256]) {
-    let mut c = [0u, ..256];
-    for i in range(0u, 256) {
+fn inv_sub(sub : &mut [usize; 256]) {
+    let mut c = [0us; 256];
+    for i in (0us..256) {
         c[i] = sub[i];
     }
-    for i in range(0u, 256) {
+    for i in (0us..256) {
         sub[c[i]] = i;
     }
 }
@@ -204,23 +205,23 @@ fn dummy_crypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
-    let mut buffer : [u8, ..1024] = [0, ..1024];
-    let mut sub : Vec<[uint, ..256]> = Vec::new();
-    for i in range(0u, key[0].len()) {
-        sub.push([0u, ..256]);
-        gen_sub(key[0][i], key[1][i], (key[2][2*i] as u16 << 8) + key[2][2*i+1] as u16, &mut sub[i]);
+    let mut buffer : [u8; 1024] = [0; 1024];
+    let mut sub : Vec<[usize; 256]> = Vec::new();
+    for i in (0us..key[0].len()) {
+        sub.push([0us; 256]);
+        gen_sub(key[0][i], key[1][i], ((key[2][2*i] as u16) << 8) + key[2][2*i+1] as u16, &mut sub[i]);
     }
-    let mut j = 0u;
+    let mut j = 0us;
     loop {
         let n = match in_file.read(&mut buffer) {
             Ok(n) => { n },
             Err(_) => { break; }
         };
-        for i in range(0, n) {
-            buffer[i] = sub[j%sub.len()][buffer[i] as uint] as u8;
+        for i in (0..n) {
+            buffer[i] = sub[j%sub.len()][buffer[i] as usize] as u8;
             j += 1;
         }
-        out_file.write(buffer.slice(0, n));
+        out_file.write(&buffer[..n]);
     }
 }
 
@@ -233,23 +234,23 @@ fn dummy_decrypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
-    let mut buffer : [u8, ..1024] = [0, ..1024];
-    let mut sub : Vec<[uint, ..256]> = Vec::new();
-    for i in range(0u, key[0].len()) {
-        sub.push([0u, ..256]);
-        gen_sub(key[0][i], key[1][i], (key[2][2*i] as u16 << 8) + key[2][2*i+1] as u16, &mut sub[i]);
+    let mut buffer : [u8; 1024] = [0; 1024];
+    let mut sub : Vec<[usize; 256]> = Vec::new();
+    for i in (0us..key[0].len()) {
+        sub.push([0us; 256]);
+        gen_sub(key[0][i], key[1][i], ((key[2][2*i] as u16) << 8) + key[2][2*i+1] as u16, &mut sub[i]);
         inv_sub(&mut sub[i]);
     }
-    let mut j = 0u;
+    let mut j = 0us;
     loop {
         let n = match in_file.read(&mut buffer) {
             Ok(n) => { n },
             Err(_) => { break; }
         };
-        for i in range(0, n) {
-            buffer[i] = sub[j%sub.len()][buffer[i] as uint] as u8;
+        for i in (0..n) {
+            buffer[i] = sub[j%sub.len()][buffer[i] as usize] as u8;
             j += 1;
         }
-        out_file.write(buffer.slice(0, n));
+        out_file.write(&buffer[..n]);
     }
 }

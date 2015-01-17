@@ -17,15 +17,7 @@ For an example of the crypto it aims to break, see DummyCrypt.
 
 ## Compilation ##
 
-You need the latest [cargo](https://crates.io) and 
-[rust](http://www.rust-lang.org/) nightlies. Although it's a bit annoying, the 
-easiest way is by running:
-
-```sh
-curl -sS https://static.rust-lang.org/rustup.sh | sudo bash
-```
-
-This will change when rust 1.0 is out.
+You need the latest [rust](http://www.rust-lang.org/) nightlies.
 
 To compile:
 
