@@ -16,12 +16,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Copyright 2014 Charles Hubain <github@haxelion.eu>
 */
+extern crate serialize;
 
-use std::os;
 use std::vec::Vec;
 use std::iter::repeat;
 use std::cmp::max;
-use std::io::File;
+use std::io::prelude::*;
+use std::fs::File;
+use std::env;
+use serialize::hex::FromHex;
 
 fn print_usage() {
     println!("dummycrypt (-e|-d) [-x X] [-a A] [-m M] input output");
@@ -43,60 +46,90 @@ fn print_usage() {
     println!("where x, a, m are elements taken from X, A and M respectively and wrap around ");
     println!("when the input is bigger than the key.");
     println!("");
-    println!("Copyright 2014 Charles Hubain <github@haxelion.eu>");
+    println!("Copyright 2015 Charles Hubain <github@haxelion.eu>");
 }
 
 enum Mode {Missing, Encrypt, Decrypt}
 
 fn main() {
-    let mut args: Vec<String> = os::args();
-    if args.len() < 4 {
-        print_usage();
-        return;
-    }
-    let output = args.pop().unwrap();
-    let input = args.pop().unwrap();
+    let mut args : Vec<String> = env::args().collect();
     let mut mode : Mode = Mode::Missing;
     let mut key : Vec<Vec<u8>> = repeat(Vec::<u8>::new()).take(3).collect();
-    let mut i = 1us;
+    let mut input : &str = "";
+    let mut output : &str = "";
+    let mut i = 1;
     while i < args.len() {
-        let arg = &args[i][];
-        if arg == "-e" {
-            mode = Mode::Encrypt;
-        }
-        else if arg == "-d" {
-            mode = Mode::Decrypt;
-        }
-        else if arg == "-x" {
-            i += 1;
-            if i >= args.len() {
-                println!("You need to provide a xor hex string after -x");
-                print_usage();
-                return;
+        match &args[i][..] {
+            "-e" => {
+                mode = Mode::Encrypt;
+            },
+            "-d" => {
+                mode = Mode::Decrypt;
+            },
+            "-x" => {
+                i += 1;
+                if i < args.len() {
+                    key[0] = match args[i][..].from_hex() {
+                        Ok(h) => h,
+                        Err(e) => {
+                            println!("xor hex string is invalid: {}", e);
+                            return;
+                        }
+                    };
+                }
+                else {
+                    println!("You need to provide a xor hex string after -x");
+                    print_usage();
+                    return;
+                }
+            },
+            "-a" => {
+                i += 1;
+                if i < args.len() {
+                    key[1] = match args[i][..].from_hex() {
+                        Ok(h) => h,
+                        Err(e) => {
+                            println!("add hex string is invalid: {}", e);
+                            return;
+                        }
+                    };
+                }
+                else {
+                    println!("You need to provide an add hex string after -a");
+                    print_usage();
+                    return;
+                }
+            },
+            "-m" => {
+                i += 1;
+                if i < args.len() {
+                    key[2] = match args[i][..].from_hex() {
+                        Ok(h) => h,
+                        Err(e) => {
+                            println!("mix hex string is invalid: {}", e);
+                            return;
+                        }
+                    };
+                }
+                else {
+                    println!("You need to provide a mix hex string after -m");
+                    print_usage();
+                    return;
+                }
+            },
+            arg => {
+                if input == "" {
+                    input = arg;
+                }
+                else if output == "" {
+                    output = arg;
+                }
+                else {
+                    println!("Unrecognized argument {}", arg);
+                    print_usage();
+                    return;
+                }
             }
-            hex_to_bytes(&args[i][], &mut key[0]);
-        }
-        else if arg == "-a" {
-            i += 1;
-            if i >= args.len() {
-                println!("You need to provide an add hex string after -a");
-                print_usage();
-                return;
-            }
-            hex_to_bytes(&args[i][], &mut key[1]);
-        }
-        else if arg == "-m" {
-            i += 1;
-            if i >= args.len() {
-                println!("You need to provide a mix hex string after -m");
-                print_usage();
-                return;
-            }
-            hex_to_bytes(&args[i][], &mut key[2]);
-        }
-        else {
-            print_usage();
-            return;
         }
         i += 1;
     }
@@ -105,65 +138,21 @@ fn main() {
     key[1].resize(lenght, 0u8);
     key[2].resize(lenght*2, 0u8);
     match mode {
-        Mode::Encrypt => dummy_crypt_file(&input[], &output[], &key),
-        Mode::Decrypt => dummy_decrypt_file(&input[], &output[], &key),
+        Mode::Encrypt => dummy_crypt_file(&input, &output, &key),
+        Mode::Decrypt => dummy_decrypt_file(&input, &output, &key),
         Mode::Missing => print_usage(),
     };
 }
 
-fn hex_to_bytes(h : &str, b :  &mut Vec<u8>) {
-    let mut i = 0us;
-    while i < h.len()-1 {
-        let n1 = match char_to_nibble(h.char_at(i)) {
-            Some(n) => { n },
-            None => { println!("Hex string {} is invalid!", h); return; }
-        };
-        let n2 = match char_to_nibble(h.char_at(i+1)) {
-            Some(n) => { n },
-            None => { println!("Hex string {} is invalid!", h); return; }
-        };
-        b.push((n1 << 4) + n2);
-        i += 2;
-    }
-}
-
-fn char_to_nibble(c : char) -> Option<u8> {
-    return match c {
-        '0' => Some(0),
-        '1' => Some(1),
-        '2' => Some(2),
-        '3' => Some(3),
-        '4' => Some(4),
-        '5' => Some(5),
-        '6' => Some(6),
-        '7' => Some(7),
-        '8' => Some(8),
-        '9' => Some(9),
-        'a' => Some(10),
-        'A' => Some(10),
-        'b' => Some(11),
-        'B' => Some(11),
-        'c' => Some(12),
-        'C' => Some(12),
-        'd' => Some(13),
-        'D' => Some(13),
-        'e' => Some(14),
-        'E' => Some(14),
-        'f' => Some(15),
-        'F' => Some(15),
-        _ => None
-    }
-}
-
 fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [usize; 256]) {
-    let c = [40320u16, 5040u16, 720u16, 120u16, 24u16, 6u16, 2u16, 1u16, 1u16];
+    let c = [40320u16, 5040, 720, 120, 24, 6, 2, 1, 1];
     let mut used = [false; 8];
-    let mut p = [0us; 8];
-    for i in (0us.. 8) {
+    let mut p = [0usize; 8];
+    for i in 0usize.. 8 {
         p[i] = ((m%c[i])/c[i+1]+1) as usize;
-        for j in (0us..8) {
+        for j in (0usize..8) {
             if used[j] == false {
-                p[i] -= 1us;
+                p[i] -= 1;
             }
             if p[i] == 0 {
                 p[i] = j;
@@ -172,85 +161,81 @@ fn gen_sub(x : u8, a : u8, m : u16, sub : &mut [usize; 256]) {
             }
         }
     }
-    for i in (0us..256) {
+    for i in 0usize..256 {
         let b = (i as u8 ^ x) + a;
-        sub[i] = ((b & 1u8) << p[0] |
-                 ((b & 2u8) >> 1) << p[1] |
-                 ((b & 4u8) >> 2) << p[2] |
-                 ((b & 8u8) >> 3) << p[3] |
-                 ((b & 16u8) >> 4) << p[4] |
-                 ((b & 32u8) >> 5) << p[5] |
-                 ((b & 64u8) >> 6) << p[6] |
-                 ((b & 128u8) >> 7) << p[7]) as usize;
+        sub[i] = ((b & 1) << p[0] |
+                 ((b & 2) >> 1) << p[1] |
+                 ((b & 4) >> 2) << p[2] |
+                 ((b & 8) >> 3) << p[3] |
+                 ((b & 16) >> 4) << p[4] |
+                 ((b & 32) >> 5) << p[5] |
+                 ((b & 64) >> 6) << p[6] |
+                 ((b & 128) >> 7) << p[7]) as usize;
     }
 }
 
 fn inv_sub(sub : &mut [usize; 256]) {
-    let mut c = [0us; 256];
-    for i in (0us..256) {
+    let mut c = [0usize; 256];
+    for i in 0usize..256 {
         c[i] = sub[i];
     }
-    for i in (0us..256) {
+    for i in 0usize..256 {
         sub[c[i]] = i;
     }
 }
 
 
 fn dummy_crypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
-    let mut in_file = match File::open(&Path::new(input)) {
+    let mut in_file = match File::open(input) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open input file {}: {}!", input, e); return;}
     };
-    let mut out_file = match File::create(&Path::new(output)) {
+    let mut out_file = match File::create(output) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
-    let mut buffer : [u8; 1024] = [0; 1024];
-    let mut sub : Vec<[usize; 256]> = Vec::new();
-    for i in (0us..key[0].len()) {
-        sub.push([0us; 256]);
+    let mut buffer = Vec::<u8>::new();
+    let mut sub = Vec::<[usize; 256]>::new();
+    for i in 0..key[0].len() {
+        sub.push([0usize; 256]);
         gen_sub(key[0][i], key[1][i], ((key[2][2*i] as u16) << 8) + key[2][2*i+1] as u16, &mut sub[i]);
     }
-    let mut j = 0us;
-    loop {
-        let n = match in_file.read(&mut buffer) {
-            Ok(n) => { n },
-            Err(_) => { break; }
-        };
-        for i in (0..n) {
-            buffer[i] = sub[j%sub.len()][buffer[i] as usize] as u8;
-            j += 1;
-        }
-        out_file.write(&buffer[..n]);
+    if in_file.read_to_end(&mut buffer).is_err() {
+        println!("Failed to read input file.");
+        return;
+    }
+    for i in 0..buffer.len() {
+        buffer[i] = sub[i%sub.len()][buffer[i] as usize] as u8;
+    }
+    if out_file.write_all(&buffer[..]).is_err() {
+        println!("Failed to write output file.");
     }
 }
 
 fn dummy_decrypt_file(input : &str, output : &str, key : &Vec<Vec<u8>>) {
-    let mut in_file = match File::open(&Path::new(input)) {
+    let mut in_file = match File::open(input) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open input file {}: {}!", input, e); return;}
     };
-    let mut out_file = match File::create(&Path::new(output)) {
+    let mut out_file = match File::create(output) {
         Ok(f) => { f },
         Err(e) => { println!("Failed to open output file {}: {}!", output, e); return;}
     };
-    let mut buffer : [u8; 1024] = [0; 1024];
-    let mut sub : Vec<[usize; 256]> = Vec::new();
-    for i in (0us..key[0].len()) {
-        sub.push([0us; 256]);
+    let mut buffer = Vec::<u8>::new();
+    let mut sub = Vec::<[usize; 256]>::new();
+    for i in 0..key[0].len() {
+        sub.push([0usize; 256]);
         gen_sub(key[0][i], key[1][i], ((key[2][2*i] as u16) << 8) + key[2][2*i+1] as u16, &mut sub[i]);
         inv_sub(&mut sub[i]);
     }
-    let mut j = 0us;
-    loop {
-        let n = match in_file.read(&mut buffer) {
-            Ok(n) => { n },
-            Err(_) => { break; }
-        };
-        for i in (0..n) {
-            buffer[i] = sub[j%sub.len()][buffer[i] as usize] as u8;
-            j += 1;
-        }
-        out_file.write(&buffer[..n]);
+    if in_file.read_to_end(&mut buffer).is_err() {
+        println!("Failed to read input file.");
+        return;
+    }
+    for i in 0..buffer.len() {
+        buffer[i] = sub[i%sub.len()][buffer[i] as usize] as u8;
+    }
+    if out_file.write_all(&buffer[..]).is_err() {
+        println!("Failed to write encrypted file.");
     }
 }
