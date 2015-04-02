@@ -133,10 +133,10 @@ fn main() {
         }
         i += 1;
     }
-    let lenght = max(key[0].len(), max(key[1].len(), key[2].len()/2));
-    key[0].resize(lenght, 0u8);
-    key[1].resize(lenght, 0u8);
-    key[2].resize(lenght*2, 0u8);
+    let length = max(key[0].len(), max(key[1].len(), key[2].len()/2));
+    key[0].resize(length, 0u8);
+    key[1].resize(length, 0u8);
+    key[2].resize(length*2, 0u8);
     match mode {
         Mode::Encrypt => dummy_crypt_file(&input, &output, &key),
         Mode::Decrypt => dummy_decrypt_file(&input, &output, &key),

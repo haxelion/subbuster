@@ -63,9 +63,9 @@ fn print_usage() {
     println!("computed.");
     println!("* -m: optional model level number, default to 1. Model level 1 is xor, model ");
     println!("level 2 is xor-add, model level 3 is xor-add-mix.");
-    println!("* -l: optional key lenght. If not provided, subbuster attempts to guess the key ");
-    println!("lenght using entropy.");
-    println!("* -k: optional maximum key lenght, default to 10.");
+    println!("* -l: optional key length. If not provided, subbuster attempts to guess the key ");
+    println!("length using entropy.");
+    println!("* -k: optional maximum key length, default to 10.");
     println!("* -v: verbose mode, display the results from all the candidates.");
     println!("");
     println!("Warning: model level 3 is really slow because of the large key space ");
@@ -76,10 +76,10 @@ fn print_usage() {
 fn main() {
     let mut args: Vec<String> = os::args();
     let mut sample = Sample::new();
-    let mut lenght: Vec<Probabilistic<usize>> = Vec::new();
+    let mut length: Vec<Probabilistic<usize>> = Vec::new();
     let mut verbose = false;
     let mut model = Model::Level1;
-    let mut max_lenght = 10us;
+    let mut max_length = 10us;
     let mut i : usize;
 
     if args.len() < 3 {
@@ -93,14 +93,14 @@ fn main() {
         if &args[i][] == "-k" {
             i += 1;
             if i >= args.len() {
-                println!("No maximum key lenght given");
+                println!("No maximum key length given");
                 print_usage();
                 return;
             }
-            max_lenght = match args[i][].parse() {
+            max_length = match args[i][].parse() {
                 Some(m) => { m },
                 None => {
-                    println!("{} is not a valid maximum key lenght", args[i]);
+                    println!("{} is not a valid maximum key length", args[i]);
                     print_usage();
                     return;
                 }
@@ -131,16 +131,16 @@ fn main() {
         else if &args[i][] == "-l" {
             i += 1;
             if i >= args.len() {
-                println!("No key lenght given");
+                println!("No key length given");
                 print_usage();
                 return;
             }
             match args[i][].parse() {
                 Some(l) => {
-                    lenght.push(Probabilistic {p : 1f64, v : l});
+                    length.push(Probabilistic {p : 1f64, v : l});
                 },
                 None => {
-                    println!("{} is not a valid key lenght", args[i]);
+                    println!("{} is not a valid key length", args[i]);
                     print_usage();
                     return;
                 }
@@ -155,13 +155,13 @@ fn main() {
         Err(e) => {println!("Could not read input file: {}", e); return;}
     };
 
-    if lenght.is_empty() {
-        find_lenght_candidates(&data[], &mut lenght, max_lenght);
+    if length.is_empty() {
+        find_length_candidates(&data[], &mut length, max_length);
         if verbose {
-            println!("Lenght candidates: ");
+            println!("Length candidates: ");
             println!("------------------\n");
             println!("S        | l");
-            for l in lenght.iter() {
+            for l in length.iter() {
                 println!("{:.6} : {}", l.p, l.v);
             }
             print!("\n\n");
@@ -170,13 +170,13 @@ fn main() {
 
     let mut best_score = 0f64;
     let mut best_key : Vec<Vec<u8>> = Vec::new();
-    lenght.truncate(5);
+    length.truncate(5);
     if verbose {
         println!("Key candidates:");
         println!("---------------\n");
         println!("S        | l   | K");
     }
-    for l in lenght.iter() {
+    for l in length.iter() {
         let mut key : Vec<Vec<u8>> = Vec::new();
         let score = match model {
             Model::Level1 => break_lvl1(&data[], &sample, l.v, &mut key),
@@ -214,9 +214,9 @@ fn main() {
     }
 }
 
-fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<usize>>, max_l : usize) {
+fn find_length_candidates(data : &[u8], length : &mut Vec<Probabilistic<usize>>, max_l : usize) {
     for l in range(1, max_l+1) {
-        lenght.push(Probabilistic{ p : 0f64, v : l});
+        length.push(Probabilistic{ p : 0f64, v : l});
         for p in range(0, l) {
             let mut freq = [0u64; 256];
             let mut sum = 0u64;
@@ -231,10 +231,10 @@ fn find_lenght_candidates(data : &[u8], lenght : &mut Vec<Probabilistic<usize>>,
                 let diff = (freq[i] as f64 / sum as f64)-(1f64/256f64);
                 var += diff*diff;
             }
-            lenght[l-1].p += var.sqrt() / (l as f64).powf(1.1);
+            length[l-1].p += var.sqrt() / (l as f64).powf(1.1);
         }
     }
-    lenght.sort_by(|a, b| {
+    length.sort_by(|a, b| {
         if b.p < a.p { Ordering::Less }
         else if b.p > a.p { Ordering::Greater }
         else { Ordering::Equal }
