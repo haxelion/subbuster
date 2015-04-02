@@ -4,7 +4,7 @@ SubBuster is an improved version of
 [xortool](https://github.com/hellman/xortool) written in rust. The main 
 differences are:
 
-* The key lenght detection uses entropy instead of just counting the number of 
+* The key length detection uses entropy instead of just counting the number of 
 equal bytes.
 * It tries to minimize the error on the whole byte frequency distribution 
 instead of just the most frequent character.
@@ -37,9 +37,9 @@ subbuster [-m [1|2|3]] [-l l] [-v] input sample
 computed.
 * -m: optional model level number, default to 1. Model level 1 is xor, model 
 level 2 is xor-add, model level 3 is xor-add-mix.
-* -l: optional key lenght. If not provided, subbuster attempts to guess the key 
-lenght using entropy.
-* -k: optional maximum key lenght, default to 10.
+* -l: optional key length. If not provided, subbuster attempts to guess the key 
+length using entropy.
+* -k: optional maximum key length, default to 10.
 * -v: verbose mode, display the results from all the candidates.
 
 Warning: model level 3 is really slow because of the large key space 
@@ -58,7 +58,7 @@ wget -O crypto.html "http://en.wikipedia.org/wiki/Cryptography"
 Output:
 
 ```raw
-Lenght candidates: 
+Length candidates: 
 ------------------
 
 S        | l
